@@ -467,6 +467,24 @@ int main(int argc, char *argv[]){
         }
     }
 
+
+    struct stat st;
+    if(stat(dir_name, &st) != 0) {
+	PS::S32 rank = PS::Comm::getRank();
+	PS::S32 ret_loc, ret;
+	if(rank == 0)
+	    ret_loc = mkdir(dir_name, 0777);
+	PS::Comm::broadcast(&ret_loc, ret);
+	if(ret == 0) {
+	    if(rank == 0)
+		fprintf(stderr, "Directory \"%s\" is successfully made.\n", dir_name);
+	} else {
+	    fprintf(stderr, "Directory %s fails to be made.\n", dir_name);
+	    PS::Abort();
+	    exit(0);
+	}
+    }
+    
     std::ofstream fout_eng;
     std::ofstream fout_tcal;
     {
@@ -532,22 +550,6 @@ int main(int argc, char *argv[]){
             FileHeader header;
             header.time = time_sys;
             header.n_body = system_grav.getNumberOfParticleLocal();
-            struct stat st;
-            if(stat(dir_name, &st) != 0) {
-                PS::S32 rank = PS::Comm::getRank();
-                PS::S32 ret_loc, ret;
-                if(rank == 0)
-                    ret_loc = mkdir(dir_name, 0777);
-                PS::Comm::broadcast(&ret_loc, ret);
-                if(ret == 0) {
-                    if(rank == 0)
-                        fprintf(stderr, "Directory \"%s\" is successfully made.\n", dir_name);
-                } else {
-                    fprintf(stderr, "Directory %s fails to be made.\n", dir_name);
-                    PS::Finalize();
-                    exit(0);
-                }
-            }
 			char filename[256];
 			sprintf(filename, "%s/%04d.dat", dir_name, snp_id++);
 			system_grav.writeParticleAscii(filename, header);
@@ -575,9 +577,12 @@ int main(int argc, char *argv[]){
         timer.restart("exchangeParticle");
 
         Tloop = PS::GetWtime();
-	tree_grav.calcForceAllAndWriteBackWithTimer
-            (CalcForceEpEp(),  system_grav, dinfo, timer, true);
-
+	//	tree_grav.calcForceAllAndWriteBackWithTimer
+	//            (CalcForceEpEp(),  system_grav, dinfo, timer, true);
+		tree_grav.calcForceAllAndWriteBack
+	            (CalcForceEpEp(),  system_grav, dinfo);
+	tree_grav.calcForceAllAndWriteBack
+	    (CalcForceEpEp(),  system_grav, dinfo, true);
         Tloop = PS::GetWtime() - Tloop;
 	
 	
@@ -588,7 +593,7 @@ int main(int argc, char *argv[]){
         fout_tcal<<"time_sys= "<<time_sys<<std::endl;
         fout_tcal<<"tree_grav.getMemSizeUsed()= "<<tree_grav.getMemSizeUsed()*1e-9<<" [Gbyte]";
         fout_tcal<<" system_grav.getMemSizeUsed()= "<<system_grav.getMemSizeUsed()*1e-9<<" [Gbyte]"<<std::endl;
-        tree_grav.dump_calc_cost(PS::Comm::getMaxValue(Tloop), fout_tcal);
+	//        tree_grav.dump_calc_cost(PS::Comm::getMaxValue(Tloop), fout_tcal);
         fout_tcal<<"Tloop= "<<Tloop<<" Ttot="<<PS::GetWtime()-Tbegin<<std::endl;
         timer.dump(fout_tcal);
         fout_tcal<<std::endl;
